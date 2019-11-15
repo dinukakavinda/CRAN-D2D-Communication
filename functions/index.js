@@ -62,7 +62,7 @@ exports.onDataAdded = functions.database.ref('/message/{id}').onCreate((snap, co
 });
 
 
-exports.uploadFile = functions.https.onRequest((req,res)=>{
+/* exports.uploadFile = functions.https.onRequest((req,res)=>{
     cors(req,res,()=>{
         if(req.method!='POST'){
             res.status(500).json({
@@ -106,9 +106,75 @@ exports.uploadFile = functions.https.onRequest((req,res)=>{
 
 
     
+}); */
+
+
+
+var admin = require("firebase-admin");
+var serviceAccount = require("./serviceAccountKey.json");
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+  databaseURL: "https://fyp-test-db.firebaseio.com/"
+  
 });
 
 
+
+var db = admin.database();
+var ref = db.ref("deviceDataStore");
+
+
+exports.connData = functions.https.onRequest((req, res) => {
+  cors(req, res, () => {
+      const usersRef = ref.child(`${req.body.deviceID}`);
+
+      if (req.method !== 'POST') {
+          return res.status(500).json({
+              message: 'Not allowed'
+          })
+      } else {
+          return usersRef.set(
+            req.body
+          ).then(() => {
+              res.status(200).json({
+                  message: req.body
+              });
+              return res.status(200)
+          }).catch(error => {
+              return res.status(500).send(error);
+          })
+      }
+  })
+
+});
+
+
+///////////////////////////////Cloud Messagging//////////////////////////////////////////////////////////
+
+
+exports.sendAdminNotification = functions.database.ref('/News/{pushId}').onCreate((snap,context) => {
+    const news= snap.val();
+         if(news.priority==1){
+         const payload = {notification: {
+             title: 'New news',
+             body: `${news.title}`
+             }
+         };
+         
+    return admin.messaging().sendToTopic("News",payload)
+        .then(function(response){
+             console.log('Notification sent successfully:',response);
+        }) 
+        .catch(function(error){
+             console.log('Notification sent failed:',error);
+        });
+        }
+    });
+
+    
+
+ 
+  
 
 
 
