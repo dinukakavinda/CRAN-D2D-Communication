@@ -159,7 +159,7 @@ exports.connData = functions.https.onRequest((req, res) => {
 
 exports.sendAdminNotification = functions.database.ref('/News/{pushId}').onCreate((snap,context) => {
     const news= snap.val();
-         if(news.priority==1){
+         if(news.priority===1){
          const payload = {notification: {
              title: 'New news',
              body: `${news.title}`
@@ -174,6 +174,33 @@ exports.sendAdminNotification = functions.database.ref('/News/{pushId}').onCreat
              console.log('Notification sent failed:',error);
         });
         }
+    });
+
+  
+    
+//////////////     Read DB Value from   ////////////////////////
+
+
+  const query = admin.database().ref("/deviceDataStore/")
+        .orderByChild('batteryLevel')
+        .limitToLast(2)
+
+    query.on('value', function (snapshot) {
+        var twoDevices = [];
+        snapshot.forEach(function (childSnapshot) {
+            var childKey = childSnapshot.key;
+            var childData = childSnapshot.child("deviceID").val();
+            
+            twoDevices.push(childData);
+
+            console.log(twoDevices);
+
+            admin.database().ref("/News/newsid2").set({
+                "description" : "Test description",
+                "priority" : 1,
+                "title" : `${twoDevices}`
+              });
+        });
     });
 
     
