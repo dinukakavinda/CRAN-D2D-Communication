@@ -181,27 +181,44 @@ exports.sendAdminNotification = functions.database.ref('/News/{pushId}').onCreat
 //////////////     Read DB Value from   ////////////////////////
 
 
-  const query = admin.database().ref("/deviceDataStore/")
-        .orderByChild('batteryLevel')
-        .limitToLast(2)
+exports.optimumDevices = functions.https.onRequest((req, res) => {
+    cors(req, res, () => {
+        //const usersRef = ref.child(`${req.body.deviceID}`);
+  
+        if (req.method !== 'POST') {
+            return res.status(500).json({
+                message: 'Not allowed'
+            })
+        } else {
+            const query = admin.database().ref("/deviceDataStore/")
+           .orderByChild('batteryLevel')
+           .limitToLast(2)
 
-    query.on('value', function (snapshot) {
-        var twoDevices = [];
-        snapshot.forEach(function (childSnapshot) {
-            var childKey = childSnapshot.key;
-            var childData = childSnapshot.child("deviceID").val();
+        query.on('value', function (snapshot) {
+            var twoDevices = [];
+            snapshot.forEach(function (childSnapshot) {
+                var childKey = childSnapshot.key;
+                var childData = childSnapshot.child("deviceID").val();
             
-            twoDevices.push(childData);
+                twoDevices.push(childData);
 
-            console.log(twoDevices);
+                console.log(twoDevices);
 
-            admin.database().ref("/News/newsid2").set({
-                "description" : "Test description",
-                "priority" : 1,
-                "title" : `${twoDevices}`
-              });
+                admin.database().ref("/News/newsid2").set({
+                    "description" : "Test description",
+                    "priority" : 1,
+                    "title" : `${twoDevices}`
+                });
+            });
         });
+           
+        };
     });
+  
+  });
+
+
+  
 
     
 
