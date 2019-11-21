@@ -12,6 +12,17 @@ const gcs = new Storage({
     projectId: projectId,
   });
 
+var admin = require("firebase-admin");
+var serviceAccount = require("./serviceAccountKey.json");
+admin.initializeApp({
+credential: admin.credential.cert(serviceAccount),
+databaseURL: "https://fyp-test-db.firebaseio.com/"
+
+});
+
+
+
+
 
 
 
@@ -110,13 +121,7 @@ exports.onDataAdded = functions.database.ref('/message/{id}').onCreate((snap, co
 
 
 
-var admin = require("firebase-admin");
-var serviceAccount = require("./serviceAccountKey.json");
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
-  databaseURL: "https://fyp-test-db.firebaseio.com/"
-  
-});
+
 
 
 
