@@ -14,6 +14,7 @@ const gcs = new Storage({
 
 var admin = require("firebase-admin");
 var serviceAccount = require("./serviceAccountKey.json");
+
 admin.initializeApp({
 credential: admin.credential.cert(serviceAccount),
 databaseURL: "https://fyp-test-db.firebaseio.com/"
@@ -183,39 +184,48 @@ exports.sendAdminNotification = functions.database.ref('/News/{pushId}').onCreat
 
 exports.optimumDevices = functions.https.onRequest((req, res) => {
     cors(req, res, () => {
-        //const usersRef = ref.child(`${req.body.deviceID}`);
-  
         if (req.method !== 'POST') {
             return res.status(500).json({
                 message: 'Not allowed'
             })
+
         } else {
             const query = admin.database().ref("/deviceDataStore/")
-           .orderByChild('batteryLevel')
-           .limitToLast(2)
+           .orderByChild("batteryLevel")
+           .limitToLast(2);
 
-        query.on('value', function (snapshot) {
-            var twoDevices = [];
-            snapshot.forEach(function (childSnapshot) {
-                var childKey = childSnapshot.key;
-                var childData = childSnapshot.child("deviceID").val();
-            
-                twoDevices.push(childData);
+            query.once('value', function (snapshot) {
+                var twoDevices = [];
+                snapshot.forEach(function (childSnapshot) {
+                    var childKey = childSnapshot.key;
+                    var childData = childSnapshot.child("deviceID").val();
+                
+                    twoDevices.push(childData);
 
-                console.log(twoDevices);
+                    console.log(twoDevices);
 
-                admin.database().ref("/News/newsid2").set({
-                    "description" : "Test description",
-                    "priority" : 1,
-                    "title" : `${twoDevices}`
+                    admin.database().ref("/News/newsid2").update({
+                        "description" : "Test description",
+                        "priority" : 1,
+                        "title" : `${twoDevices}`
+                    });
+                
                 });
-            });
+            return res.status(200).json({
+                pairingdevices : twoDevices
+                });
+
         });
            
         };
     });
   
   });
+
+
+
+
+
 
 
   
