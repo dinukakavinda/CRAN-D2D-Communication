@@ -183,18 +183,7 @@ exports.optimumDevices = functions.https.onRequest((req, res) => {
  * thawa widiyak.
  */
 
-// const getDeviceParameters = async deviceID => {
-//   const deviceRef = admin.database().ref(`/deviceDataStore/${deviceID}`);
-//   const snapshot = await deviceRef.once('value');
-
-//   if (snapshot.hasChildren()) {
-//     return snapshot.val();
-//   } else {
-//     console.log('device not found');
-//   }
-// };
-
-async function getDeviceParameters(deviceID) {
+const getDeviceParameters = async deviceID => {
   const deviceRef = admin.database().ref(`/deviceDataStore/${deviceID}`);
   const snapshot = await deviceRef.once('value');
 
@@ -203,7 +192,18 @@ async function getDeviceParameters(deviceID) {
   } else {
     console.log('device not found');
   }
-}
+};
+
+// async function getDeviceParameters(deviceID) {
+//   const deviceRef = admin.database().ref(`/deviceDataStore/${deviceID}`);
+//   const snapshot = await deviceRef.once('value');
+
+//   if (snapshot.hasChildren()) {
+//     return snapshot.val();
+//   } else {
+//     console.log('device not found');
+//   }
+// }
 
 // class DeviceParameters {
 //   constructor(name) {
