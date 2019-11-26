@@ -74,55 +74,6 @@ exports.onDataAdded = functions.database.ref('/message/{id}').onCreate((snap, co
 });
 
 
-/* exports.uploadFile = functions.https.onRequest((req,res)=>{
-    cors(req,res,()=>{
-        if(req.method!='POST'){
-            res.status(500).json({
-                message: 'Not valid!'
-            })
-            return;
-        }
-    })
-
-    const busboy = new Busboy({headers:req.headers});
-    let uploadData = null;
-
-    busboy.on('file',(fieldname,file,filename,encoding,mimetype)=>{
-        const filepath = path.join(os.tmpdir(),filename);
-        uploadData = {file:filepath , type:mimetype};
-        file.pipe(fs.createWriteStream(filepath));
-    });
-
-    busboy.on('finish',()=>{
-        const bucket = gcs.bucket('fyp-test-db.appspot.com')
-        bucket.upload(uploadData.file,{
-            uploadType:'media',
-            metadata : {
-                metadata:{
-                    contentType:uploadData.type
-                }
-            }
-        }).then((err,uploadedFile)=>{
-            if(err){
-                return res.status(500).json({
-                    error:err
-                })
-            }
-
-            res.status(200).json({
-                message: 'It worked!'
-            });
-
-        });
-    });
-
-
-    
-}); */
-
-
-
-
 
 
 
@@ -225,10 +176,37 @@ exports.optimumDevices = functions.https.onRequest((req, res) => {
 
 
 
+class DeviceParameters{
+    constructor (name){
+        this.reqdeviceID = name;
+        this.deviceValues = admin.database().ref("/deviceDataStore/" + this.reqdeviceID);
+    };
 
+    deviceRSSI(){
+        var rssi ;
+        this.deviceValues.on("value", function(snapshot) {
+             rssi = snapshot.child("connRSSI").val();
+        });  
+        return rssi;
+    };
 
+    deviceBatteryLevel() {
+        this.deviceValues.on("value", function(snapshot) {
+            return snapshot.child("batteryLevel").val();
+        });  
+    };
 
-  
+    deviceLinkSpeed(){
+        this.deviceValues.on("value", function(snapshot) {
+            return snapshot.child("linkSpeed").val();
+        });  
+    };
+    
+};
+
+let a = new DeviceParameters("0001");
+console.log(a.deviceRSSI());
+
 
     
 
