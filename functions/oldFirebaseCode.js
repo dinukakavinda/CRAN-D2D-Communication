@@ -20,46 +20,59 @@ admin.initializeApp({
   databaseURL: 'https://fyp-test-db.firebaseio.com/'
 });
 
-
-
-///////////////////// Create DB fileStoreDetails when file is uploaded ////////////////////////////////
-
 exports.onFileChange = functions.storage
   .object()
   .onFinalize((object, context) => {
-    
+    const bucket = object.bucket;
     const contentType = object.contentType;
     const filePath = object.name;
-
     console.log('File change detected, funcion execution started');
 
-    
-    const childFilePath = `${filePath}`.split('.')[0];
-    const fileRef = admin.database().ref('fileStoreDetails').child(`${childFilePath}`);
+    if (path.basename(filePath).startsWith('renamed-')) {
+      console.log('Already renamed the file');
+      return;
+    };
 
-    return fileRef.set({
-      URL : `${object.mediaLink}`,
-      availableDeviceIDs : "",
-      fileName : `${object.name}`,
-      format : `${contentType}`,
-      size : `${((object.size)/1024).toFixed(2)}`+" KB"
+
+
+
+    /*const storage = new Storage({
+      projectId: projectId
+    });
+    storage.
+    var storageRef = storage.ref(); 
+    var starsRef = storageRef.child('AC.jpg');
+    starsRef.getDownloadURL().then(function(url) {
+      console.log(url);
+    })*/
+
+
+
+    const destBucket = gcs.bucket(bucket);
+    const tmpFilePath = path.join(os.tmpdir(), path.basename(filePath));
+    const metadata = { contentType: contentType };
+
+
+
+    
+
+    return destBucket
+      .file(filePath)
+      .download({
+        destination: tmpFilePath
+      })
+      .then(() => {
+        return destBucket.upload(tmpFilePath, {
+          destination: 'renamed-' + path.basename(filePath),
+          metadata: metadata
+        });
       });
   });
 
-
-////////////////////////// Delete the file from DB ////////////////////////////////////////////////////////
-
-exports.onFileDelete = functions.storage.object().onDelete(object => {
-    const filePath = object.name;
-
-    console.log('File delete detected, funcion execution started');
-    const childFilePath = `${filePath}`.split('.')[0];
-    const fileRef = admin.database().ref('fileStoreDetails').child(`${childFilePath}`);
-    fileRef.remove();
+exports.onFileDelete = functions.storage.object().onDelete(event => {
+  console.log(event);
   return;
 });
-
-
 
 exports.onDataAdded = functions.database
   .ref('/message/{id}')
@@ -76,7 +89,7 @@ exports.onDataAdded = functions.database
 
 
 
-//////////////////////////   API END POINT 1 - Posting Device Data   //////////////////////////////
+//////////////////////////   Posting Device Data   //////////////////////////////
 
 const db = admin.database();
 const ref = db.ref('deviceDataStore');
@@ -110,57 +123,54 @@ exports.connData = functions.https.onRequest((req, res) => {
 
 
 
-////////////////////////////  API END POINT 2 - Posting File Data Store  /////////////////////////////////////////////
+////////////////////////////  Posting File Data Store  /////////////////////////////////////////////
 
 
 
 exports.fileData = functions.https.onRequest((req, res) => {
-  cors(req, res, async() => {
-    
-    const fileStoreRef = admin.database().ref('fileStoreDetails');
-    
+  cors(req, res, () => {
+    const fileRef = admin.database().ref('fileStoreDetails').child(`${req.body.fileName}`);
+
+    fileRef.once('value', function(snapshot) {
+      if(!snapshot.hasChild(`${req.body.fileName}`)){
+        console.log("Invalid file! Only files in the Datastore can transfer. Upload file to the datastore first!");
+        return;
+      };
+    });
+
     if (req.method !== 'POST') {
       return res.status(500).json({
         message: 'Not allowed'
-      }); 
+      });
+      
     }
     
-    else {
-      const arr = req.body.fileName;
-
-      for(let file of arr){
-      
-      fileStoreRef.once('value', function(snapshot) {
-   
-        var foundOne = snapshot.forEach(function (childSnapshot) {
-            if (childSnapshot.key == file) {
-                return true; 
-             }
-             else{return false};
-            });
-
-
-          if (!foundOne) {
-            console.log(file, " Can't add to the DB! Upload the file to the File Store first!")
-          }
-
-          else{
-           console.log(file," Approved!");
-           var fileRef = admin.database().ref('fileStoreDetails/'+ file).child("availableDeviceIDs");
-           var deviceJson = {};
-           deviceJson["Key "+ req.body.deviceID] = `${req.body.deviceID}`
-           fileRef.update(deviceJson); 
-          };
-     
-        
-      });
-    };
-
     
-    return res.status(200).json({
-      message : "Only files in the Filestore is approved. Check the log for the approved files."
-    });
-   }
+    else {
+      return fileRef
+        .set(req.body)
+        .then(() => {
+          res.status(200).json({
+            message: req.body
+          });
+          return res.status(200);
+        })
+        .catch(error => {
+          return res.status(500).send(error);
+        });
+        /*
+        return fileRef
+        .push(req.body.deviceID)
+        .then(() => {
+          res.status(200).json({
+            message:  file +" successfully added to DB"
+          });
+          return res.status(200);
+        })
+        .catch(error => {
+          return res.status(500).send(error);
+        */
+    }
   });
 });
 
@@ -201,7 +211,7 @@ exports.sendAdminNotification = functions.database
 
 
 
-//////////////   API END POINT -3 Select Optimum Devices from DB  ////////////////////////
+//////////////   Select Optimum Devices from DB  ////////////////////////
 
 exports.optimumDevices = functions.https.onRequest((req, res) => {
   cors(req, res, async () => {
