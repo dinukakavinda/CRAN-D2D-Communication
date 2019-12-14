@@ -5,6 +5,7 @@ const path = require('path');
 const cors = require('cors')({ origin: true });
 const Busboy = require('busboy');
 const fs = require('fs');
+const _ = require('underscore');
 
 const projectId = 'fyp-test-db';
 
@@ -32,14 +33,15 @@ exports.onFileChange = functions.storage
     const filePath = object.name;
 
     console.log('File change detected, funcion execution started');
+    
 
     
     const childFilePath = `${filePath}`.split('.')[0];
     const fileRef = admin.database().ref('fileStoreDetails').child(`${childFilePath}`);
 
     return fileRef.set({
-      URL : `${object.mediaLink}`,
-      availableDeviceIDs : "",
+      URL : "gs://fyp-test-db.appspot.com/"+`${filePath}`,
+      availableDeviceIDs : null,
       fileName : `${object.name}`,
       format : `${contentType}`,
       size : `${((object.size)/1024).toFixed(2)}`+" KB"
@@ -56,7 +58,7 @@ exports.onFileDelete = functions.storage.object().onDelete(object => {
     const childFilePath = `${filePath}`.split('.')[0];
     const fileRef = admin.database().ref('fileStoreDetails').child(`${childFilePath}`);
     fileRef.remove();
-  return;
+  return console.log(`${childFilePath}`+" is removed from Filestore!")
 });
 
 
@@ -115,9 +117,16 @@ exports.connData = functions.https.onRequest((req, res) => {
 
 
 exports.fileData = functions.https.onRequest((req, res) => {
-  cors(req, res, async() => {
+  cors(req, res, ()=> {
     
     const fileStoreRef = admin.database().ref('fileStoreDetails');
+
+
+    /* fileStoreRef.once('value',function(snapshot){
+      snapshot.forEach(function(childSnapshot){
+        childSnapshot.child('availableDeviceIDs').child(`${req.body.deviceID}`).ref.remove();
+      });
+    }); */
     
     if (req.method !== 'POST') {
       return res.status(500).json({
@@ -126,9 +135,11 @@ exports.fileData = functions.https.onRequest((req, res) => {
     }
     
     else {
-      const arr = req.body.fileName;
 
-      for(let file of arr){
+
+      const availableFiles = req.body.fileName;
+
+      for(let file of availableFiles){
       
       fileStoreRef.once('value', function(snapshot) {
    
@@ -141,14 +152,14 @@ exports.fileData = functions.https.onRequest((req, res) => {
 
 
           if (!foundOne) {
-            console.log(file, " Can't add to the DB! Upload the file to the File Store first!")
+            console.log(file, " Can't add to the DB! Upload the file to the Filestore first!")
           }
 
           else{
            console.log(file," Approved!");
-           var fileRef = admin.database().ref('fileStoreDetails/'+ file).child("availableDeviceIDs");
+           var fileRef = admin.database().ref('fileStoreDetails/'+ file).child('availableDeviceIDs');
            var deviceJson = {};
-           deviceJson["Key "+ req.body.deviceID] = `${req.body.deviceID}`
+           deviceJson[req.body.deviceID] = `${req.body.deviceID}`
            fileRef.update(deviceJson); 
           };
      
@@ -211,51 +222,77 @@ exports.optimumDevices = functions.https.onRequest((req, res) => {
             message: 'Not allowed'
          });
 
-      /*const value = await getDeviceParameters(req.query.id); 
-      return res.status(200).json({
-        message: value
-      });*/
-
+    
       
     } else {
-      
-      const query = admin
-        .database()
-        .ref('/deviceDataStore/')
-        .orderByChild('batteryLevel')
-        .limitToLast(2);
 
-      query.once('value', function(snapshot) {
-        var twoDevices = [];
-        snapshot.forEach(function(childSnapshot) {
-          //var childKey = childSnapshot.key;
-          var childData = childSnapshot.child('deviceID').val();
-          var childSSID =  childSnapshot.child('deviceSSIDName').val();
+      const fileStoreRef = admin.database().ref('/fileStoreDetails/'+`${req.body.fileName}`);
+      const fileSnapshot = await fileStoreRef.once('value');
 
-          twoDevices.push(childData);
-          twoDevices.push(childSSID);
+      if(!fileSnapshot.hasChild('availableDeviceIDs')){
+        console.log('Do not have a device!');
+        return res.status(200).json({
+          download : 1,
+          URL : `${fileSnapshot.child('URL').val()}`
+        })
 
-          console.log(twoDevices);
+      }
 
-          admin
+      else{
+        
+      const deviecStore = admin.database().ref('/deviceDataStore/');
+
+  
+      deviecStore.on('value',function(snapshot){
+
+        var requestingDeviceRssi = snapshot.child(`${req.body.deviceID}`).child('connRSSI').val();
+        var deviceScore = {};
+
+        snapshot.forEach(function(childSnapshot){
+
+          var rssiScore = Math.abs((Number(childSnapshot.child('connRSSI').val()) - Number(requestingDeviceRssi)));
+          var finalScore = ((100-rssiScore) + 0.01*Number(childSnapshot.child('batteryLevel').val())+Number(childSnapshot.child('linkSpeed').val()))
+                            .toFixed(2);
+
+          deviceScore[childSnapshot.key]=finalScore;
+          
+        })
+
+
+        delete deviceScore[`${req.body.deviceID}`];    //removing own device
+
+        console.log(deviceScore);
+
+        var pairDevice = _.max(Object.keys(deviceScore), o => deviceScore[o]);     //getting the highest score device
+
+        
+        var requestingDeviceSSID = snapshot.child(`${req.body.deviceID}`).child('deviceSSIDName').val();
+        var pairDeviceSSID = snapshot.child(`${pairDevice}`).child('deviceSSIDName').val();
+
+        admin
             .database()
             .ref('/News/newsid2')
             .update({
               description: 'Test description',
-              device1ID : `${twoDevices[0]}`,
-              device1SSID :`${twoDevices[1]}`,
-              device2ID : `${twoDevices[2]}`,
-              device2SSID : `${twoDevices[3]}`,
-              fileName : "file001",
+              device1ID : `${req.body.deviceID}`,
+              device1SSID :`${requestingDeviceSSID}`,
+              device2ID : `${pairDevice}`,
+              device2SSID : `${pairDeviceSSID}`,
+              fileName : `${req.body.fileName}`,
               priority : 1,
               title : "Test tiltle"
             });
 
-        });
+
         return res.status(200).json({
-          pairingdevices: twoDevices
+          download : 1,
+          URL : null,
+          pairDevice : `${pairDevice}`
         });
       });
+    }
+
+
     }
   });
 });
@@ -269,7 +306,7 @@ exports.optimumDevices = functions.https.onRequest((req, res) => {
  * @param {string} deviceID
  */
 
-const getDeviceParameters = async deviceID => {
+/* const getDeviceParameters = async deviceID => {
   const deviceRef = admin.database().ref(`/deviceDataStore/${deviceID}`);
   const snapshot = await deviceRef.once('value');
 
@@ -278,18 +315,18 @@ const getDeviceParameters = async deviceID => {
   } else {
     console.log('device not found');
   }
-};
+}; */
 
 
 
-// async function getDeviceParameters(deviceID) {
-//   const deviceRef = admin.database().ref(`/deviceDataStore/${deviceID}`);
-//   const snapshot = await deviceRef.once('value');
+function getDeviceParameters(deviceID) {
+  const deviceRef = admin.database().ref(`/deviceDataStore/${deviceID}`);
+  const snapshot = deviceRef.once('value');
 
-//   if (snapshot.hasChildren()) {
-//     return snapshot.val();
-//   } else {
-//     console.log('device not found');
-//   }
-// }
+   if (snapshot.hasChildren()) {
+     return snapshot.child('batteryLevel').val();
+   } else {
+     console.log('device not found');
+   }
+ };
 

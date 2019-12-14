@@ -34,7 +34,7 @@ exports.onFileChange = functions.storage
     };
 
 
-
+    
 
     /*const storage = new Storage({
       projectId: projectId
@@ -46,11 +46,12 @@ exports.onFileChange = functions.storage
       console.log(url);
     })*/
 
-
+    destBucket.getMetadata()
 
     const destBucket = gcs.bucket(bucket);
     const tmpFilePath = path.join(os.tmpdir(), path.basename(filePath));
     const metadata = { contentType: contentType };
+    destBucket.file(filePath).baseUrl
 
 
 
