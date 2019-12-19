@@ -117,16 +117,11 @@ exports.connData = functions.https.onRequest((req, res) => {
 
 
 exports.fileData = functions.https.onRequest((req, res) => {
-  cors(req, res, ()=> {
+  cors(req, res, async()=> {
+
+    await clearDeviceDataBase(`${req.body.deviceID}`)         //Clearing the DataBase under the required device
     
     const fileStoreRef = admin.database().ref('fileStoreDetails');
-
-
-    /* fileStoreRef.once('value',function(snapshot){
-      snapshot.forEach(function(childSnapshot){
-        childSnapshot.child('availableDeviceIDs').child(`${req.body.deviceID}`).ref.remove();
-      });
-    }); */
     
     if (req.method !== 'POST') {
       return res.status(500).json({
@@ -229,6 +224,7 @@ exports.optimumDevices = functions.https.onRequest((req, res) => {
       const fileStoreRef = admin.database().ref('/fileStoreDetails/'+`${req.body.fileName}`);
       const fileSnapshot = await fileStoreRef.once('value');
 
+      
       if(!fileSnapshot.hasChild('availableDeviceIDs')){
         console.log('Do not have a device!');
         return res.status(200).json({
@@ -242,24 +238,29 @@ exports.optimumDevices = functions.https.onRequest((req, res) => {
         
       const deviecStore = admin.database().ref('/deviceDataStore/');
 
+      var hasFile = [];                                                                 //file containing devices
+      fileSnapshot.child('availableDeviceIDs').forEach(function(childSnapshot){
+        hasFile.push(childSnapshot.key);
+      })
+
   
-      deviecStore.on('value',function(snapshot){
+       deviecStore.on('value',function(snapshot){
 
         var requestingDeviceRssi = snapshot.child(`${req.body.deviceID}`).child('connRSSI').val();
         var deviceScore = {};
 
-        snapshot.forEach(function(childSnapshot){
 
-          var rssiScore = Math.abs((Number(childSnapshot.child('connRSSI').val()) - Number(requestingDeviceRssi)));
-          var finalScore = ((100-rssiScore) + 0.01*Number(childSnapshot.child('batteryLevel').val())+Number(childSnapshot.child('linkSpeed').val()))
+        snapshot.forEach(function(childSnapshot){
+          
+          if(hasFile.includes(childSnapshot.key)){
+            var rssiScore = Math.abs((Number(childSnapshot.child('connRSSI').val()) - Number(requestingDeviceRssi)));
+            var finalScore = ((100-rssiScore) + 0.01*Number(childSnapshot.child('batteryLevel').val())+Number(childSnapshot.child('linkSpeed').val()))
                             .toFixed(2);
 
-          deviceScore[childSnapshot.key]=finalScore;
-          
-        })
+            deviceScore[childSnapshot.key]=finalScore;
+          };
+        });
 
-
-        delete deviceScore[`${req.body.deviceID}`];    //removing own device
 
         console.log(deviceScore);
 
@@ -285,7 +286,7 @@ exports.optimumDevices = functions.https.onRequest((req, res) => {
 
 
         return res.status(200).json({
-          download : 1,
+          download : 0,
           URL : null,
           pairDevice : `${pairDevice}`
         });
@@ -301,32 +302,16 @@ exports.optimumDevices = functions.https.onRequest((req, res) => {
 
 
 
-/**
- *
- * @param {string} deviceID
- */
-
-/* const getDeviceParameters = async deviceID => {
-  const deviceRef = admin.database().ref(`/deviceDataStore/${deviceID}`);
-  const snapshot = await deviceRef.once('value');
-
-  if (snapshot.hasChildren()) {
-    return snapshot.val();
-  } else {
-    console.log('device not found');
-  }
-}; */
 
 
+ async function clearDeviceDataBase(deviceID){
+  const fileRef = admin.database().ref('fileStoreDetails');;
+  const snapshot = await fileRef.once('value');
 
-function getDeviceParameters(deviceID) {
-  const deviceRef = admin.database().ref(`/deviceDataStore/${deviceID}`);
-  const snapshot = deviceRef.once('value');
 
-   if (snapshot.hasChildren()) {
-     return snapshot.child('batteryLevel').val();
-   } else {
-     console.log('device not found');
-   }
- };
+  snapshot.forEach(function(childSnapshot){
+    childSnapshot.child('availableDeviceIDs').child(`${deviceID}`).ref.remove();
+  });
+
+};
 
