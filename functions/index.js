@@ -227,7 +227,7 @@ exports.connFileRequest = functions.https.onRequest((req, res) => {
           var a_3 = -2.952;
           var b_1 = -34.54;
           //var b_2 = -38.85;
-          var b_3 = -41.31;
+          var b_3 = -41.31+15;
           //var p = -53.83
           var rssi_1 = -1 * Number(snapshot.child(`${req.body.deviceID}`).child('connRSSI').val());
           var deviceScore = {};
@@ -258,8 +258,11 @@ exports.connFileRequest = functions.https.onRequest((req, res) => {
 
               r_i = Math.pow(10, r_i_db * 0.1);
 
-               //limiting r_th
+               //limiting r_th3
+
+              //r_th_limit = Math.max(Math.min(r_th,(r_1+r_i)),Math.abs(r_1-r_i));
               acos_val = ((Math.pow(r_1, 2) + Math.pow(r_i, 2) - Math.pow(r_th, 2)) / (2 * r_1 * r_i));
+
               acos_val_limit = Math.max(Math.min(acos_val,1),-1);
 
               //finding prob_i
@@ -271,7 +274,20 @@ exports.connFileRequest = functions.https.onRequest((req, res) => {
 
           //get the deviceID with maximum score
           var pairDevice = _.max(Object.keys(deviceScore), o => deviceScore[o]);     //getting the highest score device
-          console.log(deviceScore[pairDevice]);
+          
+          
+          console.log(deviceScore[pairDevice],r_th,r_1,acos_val);
+
+          if (deviceScore[pairDevice]==0) {
+            console.log('Prbability is zero for the value! Downloading from the internet');
+            return res.status(200).json({
+              download: 1,
+              URL: `${fileSnapshot.child('URL').val()}`,
+              fileName : `${fileSnapshot.child('fileName').val()}`
+            })
+          };
+
+          
           //getting the device names to d2d link connection and file name
           var requestingDeviceSSID = snapshot.child(`${req.body.deviceID}`).child('deviceSSIDName').val();
           var pairDeviceSSID = snapshot.child(`${pairDevice}`).child('deviceSSIDName').val();
